@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Магазин</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* ───────────────────────────────────────────────
+     ТОКЕНЫ ДИЗАЙНА
+     ─────────────────────────────────────────────── */
+  :root{
+    --bg:        #0D0D0F;
+    --surface:   #18181B;
+    --surface-2: #212125;
+    --line:      #2A2A2F;
+    --ink:       #F1EFE9;
+    --ink-dim:   #8B8A87;
+    --accent:    #3D63FF;   /* кобальт — акцент бренда, CTA */
+    --tag:       #F4C21D;   /* горчичный — цена / бирки */
+    --radius:    18px;
+  }
+
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  @font-face{
+    font-family:'Bebas';
+    src: local('Bebas Neue');
+  }
+
+  html,body{
+    margin:0; padding:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior-y: none;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .mono{
+    font-family:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .display{
+    font-family: 'Oswald', 'Bebas', Impact, sans-serif;
+    font-weight:600;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+  }
+
+  /* ───────────────────────────────────────────────
+     ШАПКА
+     ─────────────────────────────────────────────── */
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 70%, transparent);
+    padding:14px 16px 8px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; letter-spacing:2px; color:var(--ink-dim);
+    text-transform:uppercase; margin-bottom:12px;
+  }
+  .brand-dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
+
+  .cat-row{
+    display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;
+    scrollbar-width:none;
+  }
+  .cat-row::-webkit-scrollbar{ display:none; }
+  .pill{
+    flex:0 0 auto;
+    padding:9px 16px;
+    border-radius:100px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--ink-dim);
+    font-size:14px;
+    font-weight:600;
+    white-space:nowrap;
+    transition:background .15s, color .15s, border-color .15s;
+  }
+  .pill.active{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .pill.ask{
+    margin-left:auto;
+    background:transparent;
+    border-color:var(--line);
+    color:var(--ink);
+  }
+
+  /* ───────────────────────────────────────────────
+     СЕТКА ТОВАРОВ
+     ─────────────────────────────────────────────── */
+  main{ padding:12px 16px 32px; }
+  .cat-title{
+    font-size:26px;
+    margin:10px 2px 14px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+    display:flex; flex-direction:column; gap:10px;
+    cursor:pointer;
+    transition:transform .12s, border-color .12s;
+  }
+  .card:active{ transform:scale(0.97); border-color:var(--accent); }
+  .card-icon{
+    width:100%; aspect-ratio:1;
+    background:var(--surface-2);
+    border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card-icon svg{ width:52%; height:52%; }
+  .card-name{ font-size:14.5px; font-weight:600; line-height:1.25; }
+  .card-price{ font-size:13px; color:var(--tag); }
+
+  .empty{
+    color:var(--ink-dim); font-size:14px; padding:40px 4px; text-align:center;
+  }
+
+  /* ───────────────────────────────────────────────
+     BOTTOM SHEET — деталь товара / вопрос
+     ─────────────────────────────────────────────── */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55);
+    opacity:0; pointer-events:none; transition:opacity .2s;
+    z-index:30;
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:31;
+    background:var(--surface);
+    border-radius:22px 22px 0 0;
+    border:1px solid var(--line);
+    border-bottom:none;
+    padding:10px 20px calc(24px + env(safe-area-inset-bottom));
+    transform:translateY(100%);
+    transition:transform .28s cubic-bezier(.32,.72,0,1);
+    max-height:86vh;
+    overflow-y:auto;
+  }
+  .sheet.show{ transform:translateY(0); }
+  .grabber{
+    width:36px; height:4px; background:var(--line); border-radius:4px;
+    margin:6px auto 16px;
+  }
+
+  .sheet-icon{
+    width:88px; height:88px; border-radius:16px;
+    background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:14px;
+  }
+  .sheet-icon svg{ width:50%; height:50%; }
+
+  .sheet-name{ font-size:26px; margin-bottom:4px; }
+  .sheet-price{ font-size:15px; color:var(--tag); margin-bottom:14px; }
+  .sheet-desc{ font-size:14.5px; color:var(--ink-dim); line-height:1.5; margin-bottom:20px; }
+
+  .size-label{
+    font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:10px;
+  }
+  .size-row{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px; }
+
+  /* бирка-чип — сигнатурный элемент */
+  .size-chip{
+    position:relative;
+    width:52px; height:52px;
+    border-radius:10px;
+    background:var(--surface-2);
+    border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700;
+    color:var(--ink);
+  }
+  .size-chip::before{
+    content:'';
+    position:absolute; top:6px; left:6px;
+    width:5px; height:5px; border-radius:50%;
+    background:var(--bg);
+    border:1.5px solid var(--line);
+  }
+  .size-chip.selected{
+    border-color:var(--accent);
+    border-style:solid;
+    background:rgba(61,99,255,.14);
+    color:var(--accent);
+  }
+  .size-chip.selected::before{ border-color:var(--accent); }
+
+  textarea{
+    width:100%; min-height:120px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:14px;
+    color:var(--ink);
+    font-size:15px;
+    padding:14px;
+    font-family:inherit;
+    resize:none;
+    margin-bottom:6px;
+  }
+  textarea:focus{ outline:none; border-color:var(--accent); }
+
+  .hint{ font-size:12.5px; color:var(--ink-dim); margin-bottom:4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="brand-dot"></span>МАГАЗИН</div>
+  <div class="cat-row" id="catRow"></div>
+</header>
+
+<main>
+  <div class="cat-title display" id="catTitle"></div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<div class="overlay" id="overlay"></div>
+
+<div class="sheet" id="productSheet">
+  <div class="grabber"></div>
+  <div class="sheet-icon" id="sheetIcon"></div>
+  <div class="sheet-name display" id="sheetName"></div>
+  <div class="sheet-price mono" id="sheetPrice"></div>
+  <div class="sheet-desc" id="sheetDesc"></div>
+  <div class="size-label">Размер</div>
+  <div class="size-row" id="sizeRow"></div>
+</div>
+
+<div class="sheet" id="questionSheet">
+  <div class="grabber"></div>
+  <div class="sheet-name display" style="margin-bottom:14px;">Вопрос админу</div>
+  <div class="hint">Напиши, что хочешь узнать — размерная сетка, доставка, наличие цвета и т.д.</div>
+  <textarea id="questionText" placeholder="Ваш вопрос..."></textarea>
+</div>
+
+<script>
+/* ───────────────────────────────────────────────
+   ДАННЫЕ ТОВАРОВ
+   Структура зеркалит products.py — редактируй тут
+   так же, как там, если что-то меняешь в одном месте,
+   поменяй и в другом (файлы независимые).
+   ─────────────────────────────────────────────── */
+const CATEGORIES = {
+  tshirts: {
+    title: "Футболки",
+    icon: "tshirt",
+    items: [
+      {
+        name: "Футболка Basic Black",
+        price: "150 000 сум",
+        description: "Чёрная футболка, плотный хлопок 220 г/м².",
+        sizes: ["S","M","L","XL","XXL"]
+      },
+      {
+        name: "Футболка Basic White",
+        price: "150 000 сум",
+        description: "Белая футболка, плотный хлопок 220 г/м².",
+        sizes: ["S","M","L","XL","XXL"]
+      }
+    ]
+  },
+  sweatshirts: {
+    title: "Свитшоты",
+    icon: "sweatshirt",
+    items: [
+      {
+        name: "Свитшот Oversize Grey",
+        price: "280 000 сум",
+        description: "Свободный крой, начёс внутри.",
+        sizes: ["S","M","L","XL"]
+      }
+    ]
+  },
+  hoodies: {
+    title: "Худи",
+    icon: "hoodie",
+    items: [
+      {
+        name: "Худи Classic Black",
+        price: "320 000 сум",
+        description: "Худи с капюшоном и карманом-кенгуру, плотный флис.",
+        sizes: ["S","M","L","XL","XXL"]
+      }
+    ]
+  },
+  pants: {
+    title: "Штаны",
+    icon: "pants",
+    items: [
+      {
+        name: "Штаны Cargo Beige",
+        price: "260 000 сум",
+        description: "Карго-штаны, свободный крой, накладные карманы.",
+        sizes: ["S","M","L","XL"]
+      }
+    ]
+  }
+};
+
+/* простые line-art иконки одежды */
+const ICONS = {
+  tshirt: `<svg viewBox="0 0 24 24" fill="none" stroke="#3D63FF" stroke-width="1.4"><path d="M8 3 L3 6 L5 10 L8 8.5 L8 21 L16 21 L16 8.5 L19 10 L21 6 L16 3 C16 4.8 14.2 6 12 6 C9.8 6 8 4.8 8 3 Z" stroke-linejoin="round"/></svg>`,
+  sweatshirt: `<svg viewBox="0 0 24 24" fill="none" stroke="#3D63FF" stroke-width="1.4"><path d="M8 3 L3 7 L5.5 10.5 L8 9 L8 21 L16 21 L16 9 L18.5 10.5 L21 7 L16 3 C16 4.8 14.2 6 12 6 C9.8 6 8 4.8 8 3 Z" stroke-linejoin="round"/><path d="M8 12 L16 12" stroke-dasharray="1.5 2"/></svg>`,
+  hoodie: `<svg viewBox="0 0 24 24" fill="none" stroke="#3D63FF" stroke-width="1.4"><path d="M7 4 C7 4 5 5.5 5 8 L3 12 L6 13.5 L7.5 10 L7.5 21 L16.5 21 L16.5 10 L18 13.5 L21 12 L19 8 C19 5.5 17 4 17 4 C17 4 15 6.5 12 6.5 C9 6.5 7 4 7 4 Z" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="1.3"/></svg>`,
+  pants: `<svg viewBox="0 0 24 24" fill="none" stroke="#3D63FF" stroke-width="1.4"><path d="M6 3 L18 3 L19 21 L14.5 21 L12 10 L9.5 21 L5 21 Z" stroke-linejoin="round"/><path d="M6.3 7 L17.7 7" stroke-dasharray="1.5 2"/></svg>`
+};
+
+/* ───────────────────────────────────────────────
+   TELEGRAM WEBAPP
+   ─────────────────────────────────────────────── */
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor('#0D0D0F');
+  tg.setBackgroundColor('#0D0D0F');
+}
+
+/* ───────────────────────────────────────────────
+   СОСТОЯНИЕ
+   ─────────────────────────────────────────────── */
+let activeCat = Object.keys(CATEGORIES)[0];
+let currentProduct = null;   // {catKey, idx}
+let selectedSize = null;
+
+const catRow = document.getElementById('catRow');
+const catTitle = document.getElementById('catTitle');
+const grid = document.getElementById('grid');
+const overlay = document.getElementById('overlay');
+const productSheet = document.getElementById('productSheet');
+const questionSheet = document.getElementById('questionSheet');
+
+/* категории-пилюли */
+function renderCatRow(){
+  catRow.innerHTML = '';
+  Object.entries(CATEGORIES).forEach(([key, cat])=>{
+    const p = document.createElement('button');
+    p.className = 'pill' + (key === activeCat ? ' active' : '');
+    p.textContent = cat.title;
+    p.onclick = ()=>{ activeCat = key; renderCatRow(); renderGrid(); };
+    catRow.appendChild(p);
+  });
+  const ask = document.createElement('button');
+  ask.className = 'pill ask';
+  ask.textContent = '✍️ Вопрос';
+  ask.onclick = openQuestionSheet;
+  catRow.appendChild(ask);
+}
+
+/* сетка товаров */
+function renderGrid(){
+  const cat = CATEGORIES[activeCat];
+  catTitle.textContent = cat.title;
+  grid.innerHTML = '';
+  if (!cat.items.length){
+    grid.innerHTML = '<div class="empty">Скоро тут появятся товары</div>';
+    return;
+  }
+  cat.items.forEach((item, idx)=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-icon">${ICONS[cat.icon]}</div>
+      <div class="card-name">${item.name}</div>
+      <div class="card-price mono">${item.price}</div>
+    `;
+    card.onclick = ()=> openProductSheet(activeCat, idx);
+    grid.appendChild(card);
+  });
+}
+
+/* лист товара */
+function openProductSheet(catKey, idx){
+  const cat = CATEGORIES[catKey];
+  const item = cat.items[idx];
+  currentProduct = { catKey, idx };
+  selectedSize = null;
+
+  document.getElementById('sheetIcon').innerHTML = ICONS[cat.icon];
+  document.getElementById('sheetName').textContent = item.name;
+  document.getElementById('sheetPrice').textContent = item.price;
+  document.getElementById('sheetDesc').textContent = item.description;
+
+  const sizeRow = document.getElementById('sizeRow');
+  sizeRow.innerHTML = '';
+  item.sizes.forEach(size=>{
+    const chip = document.createElement('div');
+    chip.className = 'size-chip';
+    chip.textContent = size;
+    chip.onclick = ()=>{
+      selectedSize = size;
+      [...sizeRow.children].forEach(c=>c.classList.remove('selected'));
+      chip.classList.add('selected');
+      updateMainButton();
+      tg?.HapticFeedback?.selectionChanged();
+    };
+    sizeRow.appendChild(chip);
+  });
+
+  showSheet(productSheet);
+  updateMainButton();
+}
+
+function updateMainButton(){
+  if (!tg) return;
+  if (selectedSize){
+    tg.MainButton.setText(`ОФОРМИТЬ · ${selectedSize}`);
+    tg.MainButton.show();
+    tg.MainButton.enable();
+  } else {
+    tg.MainButton.setText('ВЫБЕРИ РАЗМЕР');
+    tg.MainButton.show();
+    tg.MainButton.disable();
+  }
+}
+
+/* лист вопроса */
+function openQuestionSheet(){
+  currentProduct = null;
+  document.getElementById('questionText').value = '';
+  showSheet(questionSheet);
+  if (tg){
+    tg.MainButton.setText('ОТПРАВИТЬ ВОПРОС');
+    tg.MainButton.show();
+    tg.MainButton.enable();
+  }
+}
+
+/* открытие / закрытие шторок */
+let activeSheet = null;
+function showSheet(sheet){
+  activeSheet = sheet;
+  overlay.classList.add('show');
+  sheet.classList.add('show');
+  tg?.BackButton.show();
+}
+function hideSheet(){
+  overlay.classList.remove('show');
+  productSheet.classList.remove('show');
+  questionSheet.classList.remove('show');
+  activeSheet = null;
+  currentProduct = null;
+  tg?.MainButton.hide();
+  tg?.BackButton.hide();
+}
+overlay.onclick = hideSheet;
+tg?.BackButton?.onClick(hideSheet);
+
+/* главная кнопка Telegram */
+tg?.MainButton?.onClick(()=>{
+  if (currentProduct){
+    const cat = CATEGORIES[currentProduct.catKey];
+    const item = cat.items[currentProduct.idx];
+    if (!selectedSize) return;
+    tg.sendData(JSON.stringify({
+      type: 'order',
+      category: cat.title,
+      product: item.name,
+      price: item.price,
+      size: selectedSize
+    }));
+  } else {
+    const text = document.getElementById('questionText').value.trim();
+    if (!text) {
+      tg.HapticFeedback?.notificationOccurred('error');
+      return;
+    }
+    tg.sendData(JSON.stringify({
+      type: 'question',
+      text
+    }));
+  }
+});
+
+/* старт */
+renderCatRow();
+renderGrid();
+</script>
+</body>
+</html>
